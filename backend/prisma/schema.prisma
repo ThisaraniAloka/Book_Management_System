@@ -55,7 +55,6 @@ model BorrowRecord {
   @@index([userId, bookId])
 }
 
-// New model to track current borrows
 model CurrentBorrow {
   id        Int      @id @default(autoincrement())
   userId    Int

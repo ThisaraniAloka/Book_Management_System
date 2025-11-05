@@ -303,8 +303,8 @@ app.post('/borrow', async (req, res) => {
       
       return borrowRecord
     }, {
-      maxWait: 10000, // Increase timeout
-      timeout: 10000  // Increase timeout to 10 seconds
+      maxWait: 10000, 
+      timeout: 10000  
     })
     
     res.json({ 
@@ -409,8 +409,8 @@ app.post('/return', async (req, res) => {
       
       return returnRecord
     }, {
-      maxWait: 10000, // Increase timeout
-      timeout: 10000  // Increase timeout to 10 seconds
+      maxWait: 10000, 
+      timeout: 10000  
     })
     
     res.json({ 

@@ -6,7 +6,9 @@ function App() {
   const [categories, setCategories] = useState([])
   const [users, setUsers] = useState([])
   const [borrowRecords, setBorrowRecords] = useState([])
+  const [currentBorrows, setCurrentBorrows] = useState([])
   const [selectedCategory, setSelectedCategory] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
   const [activeTab, setActiveTab] = useState('books')
   const [editingBook, setEditingBook] = useState(null)
   const [form, setForm] = useState({
@@ -39,14 +41,24 @@ function App() {
 
   useEffect(() => {
     fetchBooks()
-  }, [selectedCategory])
+  }, [selectedCategory, searchTerm])
+
+  useEffect(() => {
+    if (returnForm.userId) {
+      fetchCurrentBorrows(returnForm.userId)
+    }
+  }, [returnForm.userId])
 
   const fetchBooks = async () => {
     try {
       setLoading(true)
-      const url = selectedCategory 
-        ? `${API_BASE}/books?categoryId=${selectedCategory}`
-        : `${API_BASE}/books`
+      let url = `${API_BASE}/books`
+      const params = new URLSearchParams()
+      
+      if (selectedCategory) params.append('categoryId', selectedCategory)
+      if (searchTerm) params.append('search', searchTerm)
+      
+      if (params.toString()) url += `?${params.toString()}`
       
       const response = await fetch(url)
       if (!response.ok) throw new Error('Failed to fetch books')
@@ -89,17 +101,39 @@ function App() {
     }
   }
 
+  const fetchCurrentBorrows = async (userId) => {
+    try {
+      const response = await fetch(`${API_BASE}/users/${userId}/current-borrows`)
+      if (response.ok) {
+        const data = await response.json()
+        setCurrentBorrows(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch current borrows')
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
 
-    if (!form.title || !form.author) {
+    if (!form.title.trim() || !form.author.trim()) {
       setError('Title and author are required')
       return
     }
 
     if (!form.bookCategoryId) {
       setError('Please select a category')
+      return
+    }
+
+    if (isNaN(form.price) || parseFloat(form.price) < 0) {
+      setError('Price must be a valid non-negative number')
+      return
+    }
+
+    if (isNaN(form.stock) || parseInt(form.stock) < 0) {
+      setError('Stock must be a valid non-negative number')
       return
     }
 
@@ -113,7 +147,11 @@ function App() {
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
+        body: JSON.stringify({
+          ...form,
+          price: parseFloat(form.price),
+          stock: parseInt(form.stock)
+        })
       })
 
       if (!response.ok) {
@@ -156,7 +194,10 @@ function App() {
         method: 'DELETE'
       })
 
-      if (!response.ok) throw new Error('Failed to delete book')
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to delete book')
+      }
 
       fetchBooks()
       alert('Book deleted successfully!')
@@ -174,11 +215,19 @@ function App() {
       return
     }
 
+    if (isNaN(borrowForm.quantity) || borrowForm.quantity < 1) {
+      setError('Quantity must be at least 1')
+      return
+    }
+
     try {
       const response = await fetch(`${API_BASE}/borrow`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(borrowForm)
+        body: JSON.stringify({
+          ...borrowForm,
+          quantity: parseInt(borrowForm.quantity)
+        })
       })
 
       if (!response.ok) {
@@ -204,11 +253,19 @@ function App() {
       return
     }
 
+    if (isNaN(returnForm.quantity) || returnForm.quantity < 1) {
+      setError('Quantity must be at least 1')
+      return
+    }
+
     try {
       const response = await fetch(`${API_BASE}/return`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(returnForm)
+        body: JSON.stringify({
+          ...returnForm,
+          quantity: parseInt(returnForm.quantity)
+        })
       })
 
       if (!response.ok) {
@@ -217,12 +274,27 @@ function App() {
       }
 
       setReturnForm({ userId: '', bookId: '', quantity: 1 })
+      setCurrentBorrows([])
       fetchBooks()
       fetchBorrowRecords()
       alert('Book returned successfully!')
     } catch (err) {
       setError(err.message)
     }
+  }
+
+  const handleUserChangeForReturn = (userId) => {
+    setReturnForm({ ...returnForm, userId, bookId: '' })
+    if (userId) {
+      fetchCurrentBorrows(userId)
+    } else {
+      setCurrentBorrows([])
+    }
+  }
+
+  const clearFilters = () => {
+    setSelectedCategory('')
+    setSearchTerm('')
   }
 
   return (
@@ -288,6 +360,7 @@ function App() {
                     value={form.price}
                     onChange={(e) => setForm({ ...form, price: e.target.value })}
                     required
+                    min="0"
                   />
                   <input
                     type="number"
@@ -295,6 +368,7 @@ function App() {
                     value={form.stock}
                     onChange={(e) => setForm({ ...form, stock: e.target.value })}
                     required
+                    min="0"
                   />
                   <select
                     value={form.bookCategoryId}
@@ -325,19 +399,30 @@ function App() {
             <section className="book-list">
               <div className="section-header">
                 <h2>Book List</h2>
-                <div className="filter">
-                  <label>Filter by Category:</label>
-                  <select
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                  >
-                    <option value="">All Categories</option>
-                    {categories.map(category => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
+                <div className="filters">
+                  <div className="filter-group">
+                    <input
+                      type="text"
+                      placeholder="Search by title or author..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="search-input"
+                    />
+                    <select
+                      value={selectedCategory}
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                    >
+                      <option value="">All Categories</option>
+                      {categories.map(category => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button onClick={clearFilters} className="btn-secondary">
+                      Clear Filters
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -361,7 +446,7 @@ function App() {
                         <tr key={book.id} className={book.stock === 0 ? 'out-of-stock' : ''}>
                           <td>{book.title}</td>
                           <td>{book.author}</td>
-                          <td>${book.price}</td>
+                          <td>${book.price.toFixed(2)}</td>
                           <td>
                             <span className={`stock ${book.stock === 0 ? 'zero' : ''}`}>
                               {book.stock === 0 ? 'Out of Stock' : book.stock}
@@ -389,7 +474,9 @@ function App() {
                     </tbody>
                   </table>
                   {books.length === 0 && (
-                    <div className="no-data">No books found</div>
+                    <div className="no-data">
+                      {searchTerm || selectedCategory ? 'No books match your filters' : 'No books found'}
+                    </div>
                   )}
                 </div>
               )}
@@ -451,7 +538,7 @@ function App() {
                   <div className="form-row">
                     <select
                       value={returnForm.userId}
-                      onChange={(e) => setReturnForm({ ...returnForm, userId: e.target.value })}
+                      onChange={(e) => handleUserChangeForReturn(e.target.value)}
                       required
                     >
                       <option value="">Select User *</option>
@@ -465,11 +552,12 @@ function App() {
                       value={returnForm.bookId}
                       onChange={(e) => setReturnForm({ ...returnForm, bookId: e.target.value })}
                       required
+                      disabled={!returnForm.userId}
                     >
                       <option value="">Select Book *</option>
-                      {books.map(book => (
-                        <option key={book.id} value={book.id}>
-                          {book.title} by {book.author}
+                      {currentBorrows.map(borrow => (
+                        <option key={borrow.id} value={borrow.bookId}>
+                          {borrow.book.title} by {borrow.book.author} (Borrowed: {borrow.quantity})
                         </option>
                       ))}
                     </select>
@@ -479,12 +567,30 @@ function App() {
                       min="1"
                       value={returnForm.quantity}
                       onChange={(e) => setReturnForm({ ...returnForm, quantity: parseInt(e.target.value) || 1 })}
+                      disabled={!returnForm.bookId}
                     />
                   </div>
-                  <button type="submit" className="btn-primary">
+                  <button 
+                    type="submit" 
+                    className="btn-primary"
+                    disabled={!returnForm.userId || !returnForm.bookId}
+                  >
                     Return Book
                   </button>
                 </form>
+                
+                {currentBorrows.length > 0 && (
+                  <div className="current-borrows">
+                    <h3>Currently Borrowed Books</h3>
+                    <ul>
+                      {currentBorrows.map(borrow => (
+                        <li key={borrow.id}>
+                          {borrow.book.title} - {borrow.quantity} copy(ies)
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </section>
             </div>
           </div>
@@ -501,6 +607,7 @@ function App() {
                       <th>Date</th>
                       <th>User</th>
                       <th>Book</th>
+                      <th>Category</th>
                       <th>Action</th>
                       <th>Quantity</th>
                     </tr>
@@ -511,6 +618,7 @@ function App() {
                         <td>{new Date(record.createdAt).toLocaleString()}</td>
                         <td>{record.user.name}</td>
                         <td>{record.book.title}</td>
+                        <td>{record.book.category.name}</td>
                         <td>
                           <span className={`action-badge ${record.action}`}>
                             {record.action.toUpperCase()}

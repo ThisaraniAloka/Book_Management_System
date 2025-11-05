@@ -22,10 +22,13 @@ model Book {
   price           Float
   stock           Int
   bookCategoryId  Int
-  category        BookCategory   @relation(fields: [bookCategoryId], references: [id])
+  category        BookCategory   @relation(fields: [bookCategoryId], references: [id], onDelete: Cascade)
   borrowRecords   BorrowRecord[]
+  currentBorrows  CurrentBorrow[]
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+
+  @@unique([title, author])
 }
 
 model User {
@@ -33,6 +36,7 @@ model User {
   name          String
   email         String         @unique
   borrowRecords BorrowRecord[]
+  currentBorrows CurrentBorrow[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -45,6 +49,22 @@ model BorrowRecord {
   quantity  Int
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id])
-  book Book @relation(fields: [bookId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([userId, bookId])
+}
+
+// New model to track current borrows
+model CurrentBorrow {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  bookId    Int
+  quantity  Int
+  borrowedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
 }

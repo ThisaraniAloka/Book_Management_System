@@ -2,10 +2,6 @@
 
 A full-stack Book Management System with React frontend and Node.js/Express backend.
 
-## 🚀 Live Demo
-- **Frontend**: http://localhost:3000
-- **Backend**: http://localhost:4000
-
 ## 🛠️ Tech Stack
 - **Frontend**: React, CSS
 - **Backend**: Node.js, Express, Prisma ORM
@@ -37,6 +33,13 @@ cd frontend
 npm install
 npm run dev
 ```
+
+## 🌐 Access Points
+After starting both servers, access the application at:
+
+Frontend Application: http://localhost:3000
+
+Backend API: http://localhost:4000
 
 ## 📖 Features
 - ✅ Add, edit, delete books
